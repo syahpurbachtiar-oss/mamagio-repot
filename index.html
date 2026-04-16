@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Mama Gio</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root { --sidebar: #1a2a47; --primary: #ff9800; --bg: #f0f2f5; }
+        body { margin: 0; display: flex; background: var(--bg); font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+        .sidebar { width: 220px; background: var(--sidebar); color: white; flex-shrink: 0; padding: 20px 0; }
+        .sidebar h2 { color: var(--primary); text-align: center; font-size: 1.1rem; margin-bottom: 30px; }
+        .nav-item { padding: 15px 25px; color: #adb5bd; display: flex; align-items: center; cursor: pointer; }
+        .nav-item.active { background: #2c3e50; color: var(--primary); border-left: 4px solid var(--primary); }
+        .main { flex-grow: 1; padding: 20px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; }
+        .stat-card p { margin: 10px 0 0; font-size: 1.4rem; font-weight: bold; }
+        .input-box { background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; border-top: 4px solid var(--primary); }
+        .input-row { display: flex; gap: 10px; margin-top: 15px; }
+        input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; }
+        .btn-save { background: #e74c3c; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .chart-card { background: white; padding: 15px; border-radius: 12px; min-height: 280px; }
+        .ai-chat { background: #1a2a47; color: white; padding: 20px; border-radius: 15px; display: flex; align-items: center; gap: 15px; }
+        .ai-chat i { font-size: 2rem; color: var(--primary); }
+        @media (max-width: 768px) { body { flex-direction: column; } .sidebar { width: 100%; display: flex; justify-content: space-around; } .sidebar h2 { display: none; } .input-row { flex-direction: column; } }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>MAMA GIO ADMIN</h2>
+        <div class="nav-item active"><i class="fas fa-th-large"></i> Dashboard</div>
+        <div class="nav-item"><i class="fas fa-money-bill"></i> Pemasukan</div>
+        <div class="nav-item"><i class="fas fa-shopping-cart"></i> Pengeluaran</div>
+    </div>
+    <div class="main">
+        <div class="stats-grid">
+            <div class="stat-card"><h3>Omzet</h3><p id="txtOmzet" style="color:#1abc9c">Rp 0</p></div>
+            <div class="stat-card"><h3>Biaya</h3><p id="txtBiaya" style="color:#e74c3c">Rp 0</p></div>
+            <div class="stat-card"><h3>Profit</h3><p id="txtProfit" style="color:#3498db">Rp 0</p></div>
+        </div>
+        <div class="input-box">
+            <b><i class="fas fa-plus-circle"></i> Catat Belanja Baru</b>
+            <div class="input-row">
+                <input type="text" id="nama" placeholder="Barang...">
+                <input type="number" id="harga" placeholder="Harga Rp">
+                <button class="btn-save" id="btnSimpan" onclick="simpanBelanja()">SIMPAN DATA</button>
+            </div>
+        </div>
+        <div class="charts-grid">
+            <div class="chart-card"><canvas id="lineChart"></canvas></div>
+            <div class="chart-card"><canvas id="pieChart"></canvas></div>
+        </div>
+        <div class="ai-chat">
+            <i class="fas fa-robot"></i>
+            <div class="ai-content">
+                <b style="color:var(--primary)">Analis AI Mama Gio:</b><br>
+                <span id="aiMsg">Menganalisa data keuangan...</span>
+            </div>
+        </div>
+    </div>
+    <script>
+        // MASUKKAN LINK GOOGLE SCRIPT KAMU DI SINI
+        const SCRIPT_URL = 'GANTI_PAKAI_LINK_WEB_APP_KAMU';
+
+        let chartL, chartP;
+        async function fetchData() {
+            try {
+                const res = await fetch(SCRIPT_URL);
+                const data = await res.json();
+                updateUI(data);
+            } catch (e) { console.log("Data belum tersambung"); }
+        }
+        function updateUI(data) {
+            let tOmzet = 0, tBiaya = 0;
+            data.forEach(d => {
+                if(d.tipe === 'Masuk') tOmzet += d.harga;
+                else tBiaya += d.harga;
+            });
+            document.getElementById('txtOmzet').innerText = "Rp " + tOmzet.toLocaleString();
+            document.getElementById('txtBiaya').innerText = "Rp " + tBiaya.toLocaleString();
+            const profit = tOmzet - tBiaya;
+            document.getElementById('txtProfit').innerText = "Rp " + profit.toLocaleString();
+            document.getElementById('aiMsg').innerText = profit >= 0 ? "Bagus! Bisnis untung. Terus pantau stok barang." : "Waduh rugi! Cek lagi pengeluaran harianmu.";
+            renderCharts(data, tOmzet, tBiaya);
+        }
+        function renderCharts(data, omzet, biaya) {
+            if(chartL) chartL.destroy();
+            if(chartP) chartP.destroy();
+            chartL = new Chart(document.getElementById('lineChart'), {
+                type: 'line',
+                data: {
+                    labels: ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'],
+                    datasets: [{ label: 'Omzet', data: [150, 230, 180, 310, 280, 420, 500], borderColor: '#1abc9c', tension: 0.3 }]
+                }
+            });
+            chartP = new Chart(document.getElementById('pieChart'), {
+                type: 'doughnut',
+                data: { labels: ['Omzet', 'Biaya'], datasets: [{ data: [omzet || 1, biaya || 1], backgroundColor: ['#3498db', '#e74c3c'] }] }
+            });
+        }
+        async function simpanBelanja() {
+            const n = document.getElementById('nama').value;
+            const h = document.getElementById('harga').value;
+            if(!n || !h) return alert("Isi dulu!");
+            document.getElementById('btnSimpan').innerText = "KIRIM...";
+            try {
+                await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ nama: n, harga: parseInt(h), tipe: 'Keluar' }) });
+                alert("Berhasil!"); location.reload();
+            } catch (e) { alert("Gagal kirim!"); }
+        }
+        fetchData();
+    </script>
+</body>
+</html>
